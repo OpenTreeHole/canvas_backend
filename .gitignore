@@ -1,0 +1,5 @@
+.idea
+.venv
+try.py
+*.env
+*.sqlite3
