@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     tz: tzinfo = pytz.UTC
     db_url: str = 'sqlite://db.sqlite3'
     test_db: str = 'sqlite://:memory:'
-    default_size: Optional[int] = 10
+    canvas_size: Optional[int] = 500
+    default_color: Optional[str] = '#fff'
 
 
 config = Settings(tz=parse_tz())
