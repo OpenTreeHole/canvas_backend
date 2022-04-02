@@ -7,12 +7,14 @@ import __init__
 print(__init__.__name__)
 from json import JSONDecodeError
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 app = FastAPI()  # app 实例化位于所有导入之前
 from config import config
+from schemas import Coordinate, PixelModel, ModifyPixel
+from utils.orm import serialize, get_object_or_404
 from models import Pixel
 from utils.common import generate_image
 
@@ -47,6 +49,20 @@ async def get_picture():
     img.save(bytes_io, 'png')
     bytes_io.seek(0)
     return StreamingResponse(bytes_io, media_type='image/png')
+
+
+@app.get('/pixels', response_model=PixelModel)
+async def get_pixel(c: Coordinate = Depends()):
+    pixel = await Pixel.filter(x=c.x, y=c.y).first()
+    return await serialize(pixel, PixelModel)
+
+
+@app.put('/pixels/{id}', response_model=PixelModel)
+async def modify_pixel(id: int, body: ModifyPixel):
+    pixel = await get_object_or_404(Pixel, id=id)
+    pixel.color = body.color
+    await pixel.save()
+    return await serialize(pixel, PixelModel)
 
 
 @app.websocket('/ws')
