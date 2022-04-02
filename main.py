@@ -1,3 +1,5 @@
+import base64
+
 import __init__
 
 print(__init__.__name__)
@@ -19,6 +21,8 @@ from schemas import Coordinate, PixelModel, ModifyPixel
 from utils.orm import serialize, get_object_or_404
 from models import Pixel
 from utils.common import generate_image
+
+broadcast = Broadcast(config.broadcast_url)
 
 
 @app.on_event('startup')
@@ -54,10 +58,7 @@ async def home():
     }
 })
 async def get_picture():
-    bytes_io = io.BytesIO()
-    img = await generate_image()
-    img.save(bytes_io, 'png')
-    bytes_io.seek(0)
+    bytes_io = io.BytesIO(base64.b64decode(await generate_image()))
     return StreamingResponse(bytes_io, media_type='image/png')
 
 
@@ -76,9 +77,6 @@ async def modify_pixel(id: int, body: ModifyPixel):
     data = await serialize(pixel, PixelModel)
     await broadcast.publish(channel='canvas', message=data)
     return data
-
-
-broadcast = Broadcast(config.broadcast_url)
 
 
 async def on_receive(websocket: WebSocket):

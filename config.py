@@ -1,8 +1,10 @@
 import os
+import re
 from datetime import tzinfo
 from typing import Optional
 
 import pytz
+from aiocache import caches
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseSettings, Field
 from pytz import UnknownTimeZoneError
@@ -35,7 +37,21 @@ class Settings(BaseSettings):
 config = Settings(tz=parse_tz())
 if not config.broadcast_url:
     config.broadcast_url = 'memory://' if config.debug else config.redis_url
-
+if not config.debug:
+    match = re.match(r'redis://(.+):(\d+)', config.redis_url)
+    assert match
+    caches.set_config({
+        'default': {
+            'cache': 'aiocache.RedisCache',
+            'endpoint': match.group(1),
+            'port': match.group(2),
+            'timeout': 5
+        }})
+else:
+    caches.set_config({
+        'default': {
+            'cache': 'aiocache.SimpleMemoryCache'
+        }})
 from main import app
 
 MODELS = ['models']
