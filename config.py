@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     db_url: str = 'sqlite://db.sqlite3'
     test_db: str = 'sqlite://:memory:'
     canvas_size: Optional[int] = 500
-    default_color: Optional[str] = '#fff'
+    default_color: Optional[str] = 'ffffff'
 
 
 config = Settings(tz=parse_tz())
