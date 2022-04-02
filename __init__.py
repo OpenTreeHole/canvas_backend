@@ -1,11 +1,10 @@
 import json
 
-from json import dumps as old_dumps
+from orjson import dumps as old_dumps
 
 
 def dumps(*args, **kwargs):
-    kwargs['ensure_ascii'] = False
-    return old_dumps(*args, **kwargs)
+    return old_dumps(args[0]).decode('utf-8')
 
 
 json.dumps = dumps

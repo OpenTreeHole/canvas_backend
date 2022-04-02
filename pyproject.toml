@@ -17,6 +17,7 @@ aerich = "^0.6.2"
 cryptography = "^36.0.2"
 Pillow = "^9.1.0"
 numpy = "^1.22.3"
+broadcaster = {extras = ["redis"], version = "^0.2.0"}
 
 [tool.poetry.dev-dependencies]
 pytest-asyncio = "^0.18.1"

@@ -1,10 +1,12 @@
-import io
-
-from starlette.responses import StreamingResponse
-
 import __init__
 
 print(__init__.__name__)
+import io
+
+from broadcaster import Broadcast
+from starlette.concurrency import run_until_first_complete
+from starlette.responses import StreamingResponse
+
 from json import JSONDecodeError
 
 from fastapi import FastAPI, Depends
@@ -19,11 +21,9 @@ from models import Pixel
 from utils.common import generate_image
 
 
-# app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-
 @app.on_event('startup')
-async def init_db():
+async def start_up():
+    await broadcast.connect()
     if await Pixel.all().count() > 0:
         return
 
@@ -37,12 +37,22 @@ async def init_db():
     print('init finished')
 
 
+@app.on_event('shutdown')
+async def shut_down():
+    await broadcast.disconnect()
+
+
 @app.get('/')
 async def home():
     return {'message': 'hello world'}
 
 
-@app.get('/picture')
+@app.get('/picture', responses={
+    200: {
+        'content': {'image/png': {}},
+        'description': 'Return PNG of the canvas.',
+    }
+})
 async def get_picture():
     bytes_io = io.BytesIO()
     img = await generate_image()
@@ -61,8 +71,25 @@ async def get_pixel(c: Coordinate = Depends()):
 async def modify_pixel(id: int, body: ModifyPixel):
     pixel = await get_object_or_404(Pixel, id=id)
     pixel.color = body.color
+    pixel.modify_times += 1
     await pixel.save()
-    return await serialize(pixel, PixelModel)
+    data = await serialize(pixel, PixelModel)
+    await broadcast.publish(channel='place', message=data)
+    return data
+
+
+broadcast = Broadcast(config.broadcast_url)
+
+
+async def on_receive(websocket: WebSocket):
+    async for data in websocket.iter_json():
+        await broadcast.publish(channel='place', message=data)
+
+
+async def on_publish(websocket: WebSocket):
+    async with broadcast.subscribe(channel='place') as subscriber:
+        async for event in subscriber:
+            await websocket.send_json(event.message)
 
 
 @app.websocket('/ws')
@@ -70,16 +97,15 @@ async def ws(websocket: WebSocket):
     async def on_connect():
         await websocket.accept()
 
-    async def on_receive(data):
-        await websocket.send_json(data)
-
     async def on_disconnect():
         pass
 
     try:
         await on_connect()
-        async for data in websocket.iter_json():
-            await on_receive(data)
+        await run_until_first_complete(
+            (on_receive, {'websocket': websocket}),
+            (on_publish, {'websocket': websocket}),
+        )
     except WebSocketDisconnect:
         await on_disconnect()
     except JSONDecodeError:

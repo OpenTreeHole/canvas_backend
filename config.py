@@ -26,11 +26,15 @@ class Settings(BaseSettings):
     tz: tzinfo = pytz.UTC
     db_url: str = 'sqlite://db.sqlite3'
     test_db: str = 'sqlite://:memory:'
+    redis_url: str = 'redis://redis:6379'
+    broadcast_url: Optional[str]
     canvas_size: Optional[int] = 500
     default_color: Optional[str] = 'ffffff'
 
 
 config = Settings(tz=parse_tz())
+if not config.broadcast_url:
+    config.broadcast_url = 'memory://' if config.debug else config.redis_url
 
 from main import app
 
