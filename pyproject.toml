@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "place"
+name = "canvas"
 version = "0.1.0"
 description = ""
 authors = ["嘉然今天吃什么 <jsclndnz@outlook.com>"]
@@ -7,8 +7,8 @@ license = "Apache"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-fastapi = {extras = ["all"], version = "^0.75.1"}
-tortoise-orm = {extras = ["accel"], version = "^0.18.1"}
+fastapi = { extras = ["all"], version = "^0.75.1" }
+tortoise-orm = { extras = ["accel"], version = "^0.18.1" }
 aiomysql = "^0.0.22"
 aiosqlite = "^0.17.0"
 pytz = "^2022.1"
@@ -17,7 +17,7 @@ aerich = "^0.6.2"
 cryptography = "^36.0.2"
 Pillow = "^9.1.0"
 numpy = "^1.22.3"
-broadcaster = {extras = ["redis"], version = "^0.2.0"}
+broadcaster = { extras = ["redis"], version = "^0.2.0" }
 
 [tool.poetry.dev-dependencies]
 pytest-asyncio = "^0.18.1"

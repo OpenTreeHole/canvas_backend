@@ -74,7 +74,7 @@ async def modify_pixel(id: int, body: ModifyPixel):
     pixel.modify_times += 1
     await pixel.save()
     data = await serialize(pixel, PixelModel)
-    await broadcast.publish(channel='place', message=data)
+    await broadcast.publish(channel='canvas', message=data)
     return data
 
 
@@ -83,11 +83,11 @@ broadcast = Broadcast(config.broadcast_url)
 
 async def on_receive(websocket: WebSocket):
     async for data in websocket.iter_json():
-        await broadcast.publish(channel='place', message=data)
+        await broadcast.publish(channel='canvas', message=data)
 
 
 async def on_publish(websocket: WebSocket):
-    async with broadcast.subscribe(channel='place') as subscriber:
+    async with broadcast.subscribe(channel='canvas') as subscriber:
         async for event in subscriber:
             await websocket.send_json(event.message)
 
