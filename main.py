@@ -75,7 +75,11 @@ async def modify_pixel(id: int, body: ModifyPixel):
     pixel.modify_times += 1
     await pixel.save()
     data = await serialize(pixel, PixelModel)
-    await broadcast.publish(channel='canvas', message=data)
+    ws_data = {
+        'type': 'pixel',
+        'data': data
+    }
+    await broadcast.publish(channel='canvas', message=ws_data)
     return data
 
 
