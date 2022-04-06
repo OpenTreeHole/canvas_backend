@@ -66,7 +66,7 @@ TORTOISE_ORM = {
         'default': config.db_url
     },
     'use_tz': True,
-    'timezone': str(config.tz)
+    'timezone': 'utc'  # 必须为 utc，否则有 bug
 }
 
 if config.mode != 'test':
