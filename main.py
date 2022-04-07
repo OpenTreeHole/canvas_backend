@@ -1,4 +1,8 @@
 import base64
+from typing import Optional
+
+from aiocache import caches
+from aiocache.base import BaseCache
 
 import __init__
 
@@ -12,8 +16,7 @@ from starlette.responses import StreamingResponse
 from json import JSONDecodeError
 
 from fastapi import FastAPI, Depends
-from fastapi import WebSocket
-from starlette.websockets import WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 
 app = FastAPI()  # app 实例化位于所有导入之前
 from config import config
@@ -23,6 +26,7 @@ from models import Pixel
 from utils.common import generate_image
 
 broadcast = Broadcast(config.broadcast_url)
+cache: BaseCache = caches.get('default')
 
 
 @app.on_event('startup')
@@ -94,13 +98,34 @@ async def on_publish(websocket: WebSocket):
             await websocket.send_json(event.message)
 
 
+async def send_meta_data(online_users: Optional[int] = None, websocket: Optional[WebSocket] = None):
+    ws_data = {
+        'type': 'meta',
+        'data': {
+            'online': online_users or await cache.get('canvas_online_users', 0),
+            'canvas_size': config.canvas_size
+        }
+    }
+    if websocket:
+        await websocket.send_json(ws_data)
+    await broadcast.publish(channel='canvas', message=ws_data)
+
+
+async def update_online_users(patch: int = 1, websocket: Optional[WebSocket] = None):
+    online_users = (await cache.get('canvas_online_users', 0)) + patch
+    await cache.set('canvas_online_users', online_users)
+    await send_meta_data(online_users, websocket)
+    return online_users
+
+
 @app.websocket('/ws')
 async def ws(websocket: WebSocket):
     async def on_connect():
         await websocket.accept()
+        await update_online_users(1, websocket)
 
     async def on_disconnect():
-        pass
+        await update_online_users(-1)
 
     try:
         await on_connect()
@@ -108,6 +133,7 @@ async def ws(websocket: WebSocket):
             (on_receive, {'websocket': websocket}),
             (on_publish, {'websocket': websocket}),
         )
+        await on_disconnect()
     except WebSocketDisconnect:
         await on_disconnect()
     except JSONDecodeError:
