@@ -3,9 +3,9 @@ import io
 from json import JSONDecodeError
 from typing import Optional
 
+from aio_pika import Channel
 from aiocache import caches
 from aiocache.base import BaseCache
-from broadcaster import Broadcast
 from fastapi import FastAPI, Depends
 from fastapi import WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_until_first_complete
@@ -19,14 +19,13 @@ from utils.common import generate_image
 from utils.orm import serialize, get_object_or_404
 from utils.mq import Mq
 
-broadcast = Broadcast(config.broadcast_url)
 mq = Mq()
 cache: BaseCache = caches.get('default')
 
 
 @app.on_event('startup')
 async def start_up():
-    await broadcast.connect()
+    await mq.connect()
     if await Pixel.all().count() > 0:
         return
 
@@ -42,7 +41,7 @@ async def start_up():
 
 @app.on_event('shutdown')
 async def shut_down():
-    await broadcast.disconnect()
+    pass
 
 
 @app.get('/')
@@ -111,6 +110,10 @@ async def ws(websocket: WebSocket):
 
     async def on_disconnect():
         await update_online_users(-1)
+        if hasattr(websocket, 'channel'):
+            channel: Channel = websocket.channel
+            if not channel.is_closed:
+                await channel.close()
 
     try:
         await on_connect()
@@ -119,8 +122,10 @@ async def ws(websocket: WebSocket):
             (mq.consume, {'callback': on_publish, 'websocket': websocket}),
         )
         await on_disconnect()
-    except WebSocketDisconnect:
-        await on_disconnect()
     except JSONDecodeError:
         await websocket.send_json({'message': 'data must be in json format'})
+        await on_disconnect()
         await websocket.close()
+    except WebSocketDisconnect:
+        print('exception')
+        await on_disconnect()
