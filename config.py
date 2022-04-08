@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     db_url: str = 'sqlite://db.sqlite3'
     test_db: str = 'sqlite://:memory:'
     redis_url: str = 'redis://redis:6379'
+    mq_url: str
     broadcast_url: Optional[str]
     canvas_size: Optional[int] = 500
     default_color: Optional[str] = 'ffffff'

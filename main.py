@@ -1,31 +1,26 @@
 import base64
+import io
+from json import JSONDecodeError
 from typing import Optional
 
 from aiocache import caches
 from aiocache.base import BaseCache
-
-import __init__
-
-print(__init__.__name__)
-import io
-
 from broadcaster import Broadcast
-from starlette.concurrency import run_until_first_complete
-from starlette.responses import StreamingResponse
-
-from json import JSONDecodeError
-
 from fastapi import FastAPI, Depends
 from fastapi import WebSocket, WebSocketDisconnect
+from starlette.concurrency import run_until_first_complete
+from starlette.responses import StreamingResponse
 
 app = FastAPI()  # app 实例化位于所有导入之前
 from config import config
 from schemas import Coordinate, PixelModel, ModifyPixel
-from utils.orm import serialize, get_object_or_404
 from models import Pixel
 from utils.common import generate_image
+from utils.orm import serialize, get_object_or_404
+from utils.mq import Mq
 
 broadcast = Broadcast(config.broadcast_url)
+mq = Mq()
 cache: BaseCache = caches.get('default')
 
 
@@ -79,43 +74,33 @@ async def modify_pixel(id: int, body: ModifyPixel):
     pixel.modify_times += 1
     await pixel.save()
     data = await serialize(pixel, PixelModel)
-    ws_data = {
+    await mq.produce({
         'type': 'pixel',
         'data': data
-    }
-    await broadcast.publish(channel='canvas', message=ws_data)
+    })
     return data
 
 
 async def on_receive(websocket: WebSocket):
     async for data in websocket.iter_json():
-        await broadcast.publish(channel='canvas', message=data)
+        await mq.produce(data)
 
 
-async def on_publish(websocket: WebSocket):
-    async with broadcast.subscribe(channel='canvas') as subscriber:
-        async for event in subscriber:
-            await websocket.send_json(event.message)
+async def on_publish(text: str, websocket: WebSocket):
+    await websocket.send_text(text)
 
 
-async def send_meta_data(online_users: Optional[int] = None, websocket: Optional[WebSocket] = None):
-    ws_data = {
+async def update_online_users(patch: int = 1, websocket: Optional[WebSocket] = None):
+    data = {
         'type': 'meta',
         'data': {
-            'online': online_users or await cache.get('canvas_online_users', 0),
+            'online': await cache.increment('canvas_online_users', patch),
             'canvas_size': config.canvas_size
         }
     }
     if websocket:
-        await websocket.send_json(ws_data)
-    await broadcast.publish(channel='canvas', message=ws_data)
-
-
-async def update_online_users(patch: int = 1, websocket: Optional[WebSocket] = None):
-    online_users = (await cache.get('canvas_online_users', 0)) + patch
-    await cache.set('canvas_online_users', online_users)
-    await send_meta_data(online_users, websocket)
-    return online_users
+        await websocket.send_json(data)
+    await mq.produce(data)
 
 
 @app.websocket('/ws')
@@ -131,7 +116,7 @@ async def ws(websocket: WebSocket):
         await on_connect()
         await run_until_first_complete(
             (on_receive, {'websocket': websocket}),
-            (on_publish, {'websocket': websocket}),
+            (mq.consume, {'callback': on_publish, 'websocket': websocket}),
         )
         await on_disconnect()
     except WebSocketDisconnect:
