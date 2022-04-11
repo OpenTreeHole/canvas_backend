@@ -15,9 +15,10 @@ app = FastAPI()  # app 实例化位于所有导入之前
 from config import config
 from schemas import Coordinate, PixelModel, ModifyPixel
 from models import Pixel
-from utils.common import generate_image
+from utils.common import set_image
 from utils.orm import serialize, get_object_or_404
 from utils.mq import Mq
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 mq = Mq()
 cache: BaseCache = caches.get('default')
@@ -25,23 +26,21 @@ cache: BaseCache = caches.get('default')
 
 @app.on_event('startup')
 async def start_up():
+    scheduler = AsyncIOScheduler()
+    scheduler.start()
+    scheduler.add_job(set_image, 'interval', seconds=5)
+
     await mq.connect()
-    if await Pixel.all().count() > 0:
-        return
 
-    def pixels():
-        for i in range(config.canvas_size):
-            for j in range(config.canvas_size):
-                yield Pixel(x=j + 1, y=i + 1)
+    if await Pixel.all().count() == 0:
+        def pixels():
+            for i in range(config.canvas_size):
+                for j in range(config.canvas_size):
+                    yield Pixel(x=j + 1, y=i + 1)
 
-    print('init data')
-    await Pixel.bulk_create(pixels())
-    print('init finished')
-
-
-@app.on_event('shutdown')
-async def shut_down():
-    pass
+        print('init data')
+        await Pixel.bulk_create(pixels())
+        print('init finished')
 
 
 @app.get('/')
@@ -56,7 +55,8 @@ async def home():
     }
 })
 async def get_picture():
-    bytes_io = io.BytesIO(base64.b64decode(await generate_image()))
+    result = await cache.get('canvas_image', '')
+    bytes_io = io.BytesIO(base64.b64decode(result))
     return StreamingResponse(bytes_io, media_type='image/png')
 
 
