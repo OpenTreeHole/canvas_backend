@@ -4,3 +4,4 @@ data
 try.py
 *.env
 *.sqlite3
+.history
